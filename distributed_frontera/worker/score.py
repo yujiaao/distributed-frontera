@@ -51,7 +51,7 @@ class ScoringWorker(object):
             for m in self._in_consumer.get_messages(count=self.consumer_batch_size, block=True, timeout=1.0):
                 try:
                     msg = self._decoder.decode(m.message.value)
-                except (KeyError, TypeError), e:
+                except (KeyError, TypeError) as e:
                     logger.error("Decoding error: %s", e)
                     continue
                 else:
@@ -76,7 +76,7 @@ class ScoringWorker(object):
                     raise TypeError('Unknown message type %s' % type)
                 finally:
                     consumed += 1
-        except OffsetOutOfRangeError, e:
+        except OffsetOutOfRangeError as e:
             # https://github.com/mumrah/kafka-python/issues/263
             self._in_consumer.seek(0, 2)  # moving to the tail of the log
             logger.info("Caught OffsetOutOfRangeError, moving to the tail of the log.")
@@ -174,7 +174,7 @@ class ScoringWorker(object):
                     True
                 )
                 output.append(encoded)
-        return output       
+        return output
 
     def on_request_error(self, request, error):
         self.backend.update_states(request, False)

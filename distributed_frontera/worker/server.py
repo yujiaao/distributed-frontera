@@ -96,12 +96,12 @@ class JsonRpcResource(JsonResource):
         try:
             try:
                 return self.process_request(method, jrequest)
-            except Exception, err:
+            except Exception as err:
                 if isinstance(err, JsonRpcError):
                     raise err
                 trace_lines = format_exception(*exc_info())
                 raise JsonRpcError(500, "Error processing request: %s" % (str("").join(trace_lines)))
-        except JsonRpcError, err:
+        except JsonRpcError as err:
             return err(jrequest['id'])
 
 

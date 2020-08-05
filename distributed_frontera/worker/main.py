@@ -4,10 +4,10 @@ from argparse import ArgumentParser
 from time import asctime
 
 from twisted.internet import reactor
-from kafka import KafkaClient, KeyedProducer, SimpleConsumer
-from kafka.common import OffsetOutOfRangeError
-from kafka.protocol import CODEC_SNAPPY
-from frontera.core.manager import FrontierManager
+from kafka import KafkaClient, KafkaProducer, KafkaConsumer
+from kafka.errors import OffsetOutOfRangeError
+from kafka.codec import snappy
+from frontera.core.manager import LocalFrontierManager
 from frontera.utils.url import parse_domain_from_url_fast
 
 from distributed_frontera.backends.remote.codecs.msgpack import Decoder, Encoder
@@ -61,15 +61,15 @@ class Slot(object):
 class FrontierWorker(object):
     def __init__(self, settings, no_batches, no_scoring, no_incoming):
         self._kafka = KafkaClient(settings.get('KAFKA_LOCATION'))
-        self._producer = KeyedProducer(self._kafka, partitioner=Crc32NamePartitioner, codec=CODEC_SNAPPY)
+        self._producer = KafkaProducer(self._kafka, partitioner=Crc32NamePartitioner, codec=snappy)
 
-        self._in_consumer = SimpleConsumer(self._kafka,
+        self._in_consumer = KafkaConsumer(self._kafka,
                                        settings.get('FRONTIER_GROUP'),
                                        settings.get('INCOMING_TOPIC'),
                                        buffer_size=1048576,
                                        max_buffer_size=10485760)
         if not no_scoring:
-            self._scoring_consumer = SimpleConsumer(self._kafka,
+            self._scoring_consumer = KafkaConsumer(self._kafka,
                                            settings.get('FRONTIER_GROUP'),
                                            settings.get('SCORING_TOPIC'),
                                            buffer_size=262144,
@@ -77,7 +77,7 @@ class FrontierWorker(object):
 
         self._offset_fetcher = Fetcher(self._kafka, settings.get('OUTGOING_TOPIC'), settings.get('FRONTIER_GROUP'))
 
-        self._manager = FrontierManager.from_settings(settings)
+        self._manager = LocalFrontierManager.from_settings(settings)
         self._backend = self._manager.backend
         self._encoder = Encoder(self._manager.request_model)
         self._decoder = Decoder(self._manager.request_model, self._manager.response_model)
@@ -103,7 +103,7 @@ class FrontierWorker(object):
             for m in self._in_consumer.get_messages(count=self.consumer_batch_size, block=True, timeout=1.0):
                 try:
                     msg = self._decoder.decode(m.message.value)
-                except (KeyError, TypeError), e:
+                except (KeyError, TypeError) as e:
                     logger.error("Decoding error: %s", e)
                     continue
                 else:
@@ -128,7 +128,7 @@ class FrontierWorker(object):
                         self._backend.request_error(request, error)
                 finally:
                     consumed += 1
-        except OffsetOutOfRangeError, e:
+        except OffsetOutOfRangeError as e:
             # https://github.com/mumrah/kafka-python/issues/263
             self._in_consumer.seek(0, 2)  # moving to the tail of the log
             logger.info("Caught OffsetOutOfRangeError, moving to the tail of the log.")
@@ -146,7 +146,7 @@ class FrontierWorker(object):
             for m in self._scoring_consumer.get_messages(count=1024):
                 try:
                     msg = self._decoder.decode(m.message.value)
-                except (KeyError, TypeError), e:
+                except (KeyError, TypeError) as e:
                     logger.error("Decoding error: %s", e)
                     continue
                 else:
@@ -158,7 +158,7 @@ class FrontierWorker(object):
                 finally:
                     consumed += 1
             self._backend.update_score(batch)
-        except OffsetOutOfRangeError, e:
+        except OffsetOutOfRangeError as e:
             # https://github.com/mumrah/kafka-python/issues/263
             self._scoring_consumer.seek(0, 2)  # moving to the tail of the log
             logger.info("Caught OffsetOutOfRangeError, moving to the tail of the log.")
@@ -186,7 +186,7 @@ class FrontierWorker(object):
             try:
                 request.meta['jid'] = self.job_id
                 eo = self._encoder.encode_request(request)
-            except Exception, e:
+            except Exception as e:
                 logger.error("Encoding error, %s, fingerprint: %s, url: %s" % (e,
                                                                                request.meta['fingerprint'],
                                                                                request.url))
@@ -196,9 +196,9 @@ class FrontierWorker(object):
 
             try:
                 netloc, name, scheme, sld, tld, subdomain = parse_domain_from_url_fast(request.url)
-            except Exception, e:
-                logger.error("URL parsing error %s, fingerprint %s, url %s" % (e, 
-                                                                                request.meta['fingerprint'], 
+            except Exception as e:
+                logger.error("URL parsing error %s, fingerprint %s, url %s" % (e,
+                                                                                request.meta['fingerprint'],
                                                                                 request.url))
             encoded_name = name.encode('utf-8', 'ignore')
             self._producer.send_messages(self.outgoing_topic, encoded_name, eo)

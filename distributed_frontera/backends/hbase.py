@@ -254,13 +254,13 @@ class HBaseState(object):
                     hb_obj = prepare_hbase_object(state=state)
                     b.put(unhexlify(fprint), hb_obj)
         if force_clear:
-            print "Cache has %d items, clearing" % len(self._state_cache)
+            print("Cache has %d items, clearing" % len(self._state_cache))
             self._state_cache.clear()
 
     def fetch(self, fingerprints):
         to_fetch = [f for f in fingerprints if f not in self._state_cache]
-        print "to fetch %d from %d" % (len(to_fetch), len(fingerprints))
-        print "cache size %s" % len(self._state_cache)
+        print( "to fetch %d from %d" % (len(to_fetch), len(fingerprints)))
+        print( "cache size %s" % len(self._state_cache))
         for chunk in chunks(to_fetch, 65536):
             keys = [unhexlify(fprint) for fprint in chunk]
             table = self.connection.table(self._table_name)

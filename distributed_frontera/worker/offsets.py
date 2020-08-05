@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from kafka.common import OffsetRequest, OffsetFetchRequest, check_error, UnknownTopicOrPartitionError
+from kafka.errors import check_error, UnknownTopicOrPartitionError
+from kafka.consumer.fetcher import OffsetRequest
+from kafka.protocol.commit import OffsetFetchRequest
 from logging import getLogger
 from collections import namedtuple
 
