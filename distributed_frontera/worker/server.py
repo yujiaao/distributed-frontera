@@ -7,6 +7,7 @@ from traceback import format_exception
 from twisted.web import server, resource
 
 from distributed_frontera.worker.utils import listen_tcp
+import io
 
 logger = getLogger("cf-server")
 
@@ -60,7 +61,7 @@ class JsonResource(resource.Resource):
         return r
 
     def parse_jsonrpc(self, txrequest):
-        if isinstance(txrequest.content, file):
+        if isinstance(txrequest.content, io.IOBase):
             data = txrequest.content.read()
         else:
             data = txrequest.content.getvalue()
